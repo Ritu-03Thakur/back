@@ -1,0 +1,69 @@
+# Byte-compiled / optimized / DLL files
+_pycache_/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Dependency directories
+node_modules/
+dist/
+build/
+*.egg-info/
+
+# Logs and debugging
+logs/
+*.log
+debug/
+error.log
+nohup.out
+
+# Data files
+data/
+*.csv
+*.json
+*.xlsx
+*.parquet
+*.pkl
+*.h5
+*.hdf5
+*.zip
+*.tar
+*.gz
+
+# Model files
+models/
+*.h5
+*.hdf5
+*.pb
+*.onnx
+*.tflite
+*.pt
+*.pkl
+*.joblib
+*.ckpt
+
+# TensorBoard
+logs/
+events.out.tfevents.*
+
+# Environment files
+.env
+*.env
+
+# VSCode and JetBrains
+.vscode/
+.idea/
+*.iml
+
+# Docker
+docker-compose.override.yml
+
+# Jupyter runtime
+~$*
