@@ -1,13 +1,11 @@
 import os
 import logging
-from flask import Flask, flash, request, redirect, render_template, url_for, session
+from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 import tempfile
 
 from utils.parser import extract_resume_data
 from utils.scorer import score_resume_against_job
-# from utils.parser import parse_pdf, parse_docx, parse_json
-
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -15,103 +13,82 @@ logging.basicConfig(level=logging.DEBUG)
 # Configure app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "development-secret-key")
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  
 
 # Allowed file extensions
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'json'}
 
 def allowed_file(filename):
+    """Check if the uploaded file has a valid extension."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# @app.route('/')
-# def index():
-#     return render_template('index.html')
 
-
-# calling parser.py for execution
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """Endpoint to upload resume and compare against job description."""
     if 'resume' not in request.files:
-        flash('No file part', 'danger')
-        return redirect(request.url)
-    
+        return jsonify({'error': 'No file uploaded'}), 400
+
     file = request.files['resume']
     job_description = request.form.get('job_description', '')
-    
+
     if file.filename == '':
-        flash('No selected file', 'danger')
-        return redirect(request.url)
-        
+        return jsonify({'error': 'No file selected'}), 400
+
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         file_extension = filename.rsplit('.', 1)[1].lower()
-        
+
         # Save file to temporary location
         temp_dir = tempfile.gettempdir()
         file_path = os.path.join(temp_dir, filename)
         file.save(file_path)
-        
+
         try:
             # Parse resume
             resume_data = extract_resume_data(file_path, file_extension)
-            
-            # Score against job description if provided
+
+            # Score against job description
             score = 0
             score_details = {}
             if job_description and resume_data:
                 score, score_details = score_resume_against_job(resume_data, job_description)
-            
-            # Store in session for result page
-            session['resume_data'] = resume_data
-            session['score'] = score
-            session['score_details'] = score_details
-            session['job_description'] = job_description
-            
+
             # Clean up temp file
             os.remove(file_path)
-            
-            return redirect(url_for('result'))
-            
+
+            # Return result as JSON
+            return jsonify({
+                "resume_data": resume_data,
+                "score": score,
+                "score_details": score_details,
+                "job_description": job_description
+            })
+
         except Exception as e:
             logging.error(f"Error processing file: {str(e)}")
-            flash(f'Error processing file: {str(e)}', 'danger')
-            return redirect(request.url)
-    else:
-        flash(f'File type not allowed. Please upload PDF, DOCX, or JSON files.', 'danger')
-        return redirect(request.url)
+            
+            # Clean up even on failure
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            
+            return jsonify({'error': f"Error processing file: {str(e)}"}), 500
 
-# calling scorer.py file for execution
-@app.route('/result')
-def result():
-    # Get results from session
-    resume_data = session.get('resume_data', {})
-    score = session.get('score', 0)
-    score_details = session.get('score_details', {})
-    job_description = session.get('job_description', '')
-    
-    # Get matched skills
-    skills_match = score_details.get('matched_skills', {}) if score_details else {}
-    
-    if not resume_data:
-        flash('No resume data found. Please upload a resume first.', 'warning')
-        return redirect(url_for('index'))
-    
-    return render_template('result.html', 
-                          resume_data=resume_data, 
-                          score=score, 
-                          skills_match=skills_match,
-                          job_description=job_description,
-                          score_details=score_details)
+    return jsonify({'error': 'Invalid file type. Only PDF, DOCX, or JSON allowed.'}), 400
+
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
-    flash('File too large. Maximum file size is 16MB.', 'danger')
-    return redirect(url_for('index')), 413
+    """Handle file size errors."""
+    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
+
 
 @app.errorhandler(500)
 def internal_server_error(error):
-    flash('An unexpected error occurred. Please try again.', 'danger')
-    return redirect(url_for('index')), 500
+    """Handle internal server errors."""
+    return jsonify({'error': 'An unexpected error occurred. Please try again.'}), 500
 
+
+# Run the server
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
